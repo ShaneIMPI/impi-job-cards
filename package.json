@@ -1,22 +1,14 @@
 {
-  "name": "impi-jobcards",
+  "name": "floorplan-studio-cloud",
+  "version": "1.0.0",
   "private": true,
-  "version": "2.0.0",
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.4",
-    "jose": "^5.9.6",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@neondatabase/serverless": "^1.0.0",
+    "bcryptjs": "^2.4.3",
+    "jose": "^5.9.6"
   },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.8",
-    "vite-plugin-pwa": "^0.20.5"
+  "scripts": {
+    "test": "npm --prefix tests install && npm --prefix tests test"
   }
 }
