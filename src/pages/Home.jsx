@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api } from '../api'
+import Reports from './Reports.jsx'
 import {
-  getOpenEntry, getRecentEntries, signIn, signOut, updateNotes,
+  getOpenEntry, getRecentEntries, signIn, signOut, updateNotes, queueSiteSave,
   setupAutoSync, pendingCount
 } from '../offlineQueue'
 
@@ -14,6 +15,7 @@ function formatDate(iso) {
 }
 
 export default function Home({ profile, onLogout }) {
+  const [view, setView] = useState('home')
   const [sites, setSites] = useState([])
   const [siteId, setSiteId] = useState('')
   const [siteOther, setSiteOther] = useState('')
@@ -54,15 +56,30 @@ export default function Home({ profile, onLogout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function handleSignIn(e) {
-    e.preventDefault()
+  async function handleSignIn(e, saveSite = false) {
+    if (e && e.preventDefault) e.preventDefault()
     if (!siteId && !siteOther.trim()) return
     setBusy(true)
-    await signIn({
-      staffId: profile.id,
-      siteId: siteId || null,
-      siteNameOther: siteId ? null : siteOther.trim()
-    })
+    let useSiteId = siteId || null
+    let useOther = siteId ? null : siteOther.trim()
+    if (!siteId && saveSite) {
+      // Save the new site to the shared list so it appears in everyone's dropdown.
+      try {
+        if (!navigator.onLine) throw new Error('offline')
+        const { site } = await api('/sites', { method: 'POST', body: { name: siteOther.trim() } })
+        useSiteId = site.id
+        useOther = null
+        setSites((prev) => {
+          const next = prev.some((x) => x.id === site.id) ? prev : [...prev, site].sort((a, b) => a.name.localeCompare(b.name))
+          localStorage.setItem('ijc_sites', JSON.stringify(next))
+          return next
+        })
+      } catch {
+        // Offline or failed: sign in with the typed name now and save the site once back online.
+        queueSiteSave(siteOther.trim())
+      }
+    }
+    await signIn({ staffId: profile.id, siteId: useSiteId, siteNameOther: useOther })
     setBusy(false)
     setSiteId('')
     setSiteOther('')
@@ -75,6 +92,32 @@ export default function Home({ profile, onLogout }) {
     setBusy(false)
     setNotes('')
     refresh()
+  }
+
+  const [newSite, setNewSite] = useState('')
+  const [siteMsg, setSiteMsg] = useState('')
+  async function reloadSites() {
+    const { sites } = await api('/sites')
+    setSites(sites)
+    localStorage.setItem('ijc_sites', JSON.stringify(sites))
+  }
+  async function handleAddSite(e) {
+    e.preventDefault()
+    if (!newSite.trim()) return
+    setSiteMsg('')
+    try {
+      await api('/sites', { method: 'POST', body: { name: newSite.trim() } })
+      setNewSite('')
+      await reloadSites()
+      setSiteMsg('Site added.')
+    } catch (err) { setSiteMsg(err.message) }
+  }
+  async function handleRemoveSite(id, name) {
+    if (!window.confirm(`Remove "${name}" from the site list? Past visits are kept.`)) return
+    try {
+      await api('/sites', { method: 'PATCH', body: { id, active: false } })
+      await reloadSites()
+    } catch (err) { setSiteMsg(err.message) }
   }
 
   async function handleNotesBlur() {
@@ -93,6 +136,8 @@ export default function Home({ profile, onLogout }) {
     return entry.site_name_other || 'Site'
   }
 
+  if (view === 'reports') return <Reports profile={profile} onBack={() => setView('home')} />
+
   return (
     <div className="screen">
       <div className="brandbar">
@@ -100,7 +145,10 @@ export default function Home({ profile, onLogout }) {
           <img src={`${import.meta.env.BASE_URL}logo-header.png`} alt="Amandla Protection Services" className="brand-logo" />
           <div className="name">IMPI <span>Job Cards</span></div>
         </div>
-        <button className="link" onClick={handleLogout}>Sign out of app</button>
+        <div style={{ display: 'flex', gap: 14 }}>
+          <button className="link" onClick={() => setView('reports')}>Reports</button>
+          <button className="link" onClick={handleLogout}>Sign out of app</button>
+        </div>
       </div>
 
       {!online && (
@@ -142,9 +190,24 @@ export default function Home({ profile, onLogout }) {
                 style={{ marginTop: 8 }}
               />
             )}
-            <button className="primary" type="submit" disabled={busy || (!siteId && !siteOther.trim())}>
-              Sign in now
-            </button>
+            {siteId || !siteOther.trim() ? (
+              <button className="primary" type="submit" disabled={busy || (!siteId && !siteOther.trim())}>
+                Sign in now
+              </button>
+            ) : (
+              <>
+                <p className="hint" style={{ marginTop: 12 }}>
+                  “{siteOther.trim()}” isn't on the list. Is this a site you visit regularly?
+                </p>
+                <button className="primary" type="button" disabled={busy} onClick={(e) => handleSignIn(e, false)}>
+                  Sign in — one-time use
+                </button>
+                <button className="primary" type="button" disabled={busy} onClick={(e) => handleSignIn(e, true)}
+                  style={{ marginTop: 8, background: '#1a1a1a' }}>
+                  Sign in &amp; save site for next time
+                </button>
+              </>
+            )}
           </form>
         ) : (
           <div>
@@ -162,6 +225,24 @@ export default function Home({ profile, onLogout }) {
           </div>
         )}
       </div>
+
+      {profile.role === 'admin' && (
+        <div className="card">
+          <h2>Admin — manage sites</h2>
+          <form onSubmit={handleAddSite}>
+            <input type="text" placeholder="New site name" value={newSite}
+              onChange={(e) => setNewSite(e.target.value)} />
+            <button className="primary" type="submit" disabled={!online || !newSite.trim()}>Add site</button>
+          </form>
+          {siteMsg && <p className="hint">{siteMsg}</p>}
+          {sites.map((s) => (
+            <div className="entry-row" key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{s.name}</span>
+              <button className="link" type="button" onClick={() => handleRemoveSite(s.id, s.name)}>Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {recent.length > 0 && (
         <div className="card">

@@ -8,12 +8,28 @@ export default safe(async function handler(req, res) {
   if (!u || !u.active) return send(res, 401, { error: 'Not signed in' })
   const b = req.body || {}
 
-  // List: own entries; HR/admin may see everyone's (?all=1)
+  // List visits for reports. Staff: own only. HR/admin: any one person or everyone.
+  //   ?month=YYYY-MM   (South Africa time)   ?staff=all | <profile id>
   if (req.method === 'GET') {
-    const all = req.query.all === '1' && (u.role === 'admin' || u.role === 'hr')
-    const rows = all
-      ? await sql`select e.*, p.full_name, p.email, s.name as site_name from job_entries e join profiles p on p.id=e.staff_id left join sites s on s.id=e.site_id order by e.sign_in_at desc limit 1000`
-      : await sql`select e.*, s.name as site_name from job_entries e left join sites s on s.id=e.site_id where e.staff_id=${u.id} order by e.sign_in_at desc limit 200`
+    const privileged = u.role === 'admin' || u.role === 'hr'
+    const q = req.query || {}
+    let staffFilter = u.id
+    if (privileged) {
+      if (q.staff === 'all' || q.all === '1') staffFilter = null
+      else if (UUID.test(q.staff || '')) staffFilter = q.staff
+    }
+    const from = /^\d{4}-(0[1-9]|1[0-2])$/.test(q.month || '') ? q.month + '-01' : null
+    const rows = await sql`
+      select e.*, p.full_name, p.email, s.name as site_name
+      from job_entries e
+      join profiles p on p.id = e.staff_id
+      left join sites s on s.id = e.site_id
+      where (${staffFilter}::uuid is null or e.staff_id = ${staffFilter}::uuid)
+        and (${from}::date is null or (
+              e.sign_in_at >= (${from}::date::timestamp at time zone 'Africa/Johannesburg')
+          and e.sign_in_at <  ((${from}::date + interval '1 month')::timestamp at time zone 'Africa/Johannesburg')))
+      order by e.sign_in_at asc
+      limit 5000`
     return send(res, 200, { entries: rows })
   }
 

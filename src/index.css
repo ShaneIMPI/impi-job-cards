@@ -158,3 +158,25 @@ button.secondary {
 .hint { font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
 .error { color: var(--impi-red); font-size: 0.85rem; margin-top: 10px; }
 .success { color: var(--good); font-size: 0.85rem; margin-top: 10px; }
+
+/* ---- Reports ---- */
+.report-screen .report-sheet { max-width: 900px; }
+.table-wrap { overflow-x: auto; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.report-table th, .report-table td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.report-table th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.report-table td:nth-child(n+4):not(:last-child) { white-space: nowrap; }
+.print-only { display: none; }
+.report-letterhead { display: none; align-items: center; gap: 14px; border-bottom: 3px solid var(--impi-red); padding-bottom: 12px; margin-bottom: 16px; }
+
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .print-only { display: inline; }
+  .report-letterhead { display: flex !important; }
+  .screen { padding: 0; }
+  .card { border: none; box-shadow: none; padding: 0; max-width: none; }
+  .report-table { font-size: 11px; }
+  .report-table tr { page-break-inside: avoid; }
+  @page { margin: 14mm; }
+}

@@ -49,6 +49,11 @@ const newId = () =>
 
 // ---- SIGN IN ----------------------------------------------------------
 
+export function queueSiteSave(name) {
+  enqueue({ op: 'site', payload: { name } })
+  flushQueue()
+}
+
 export async function signIn({ staffId, siteId, siteNameOther }) {
   const now = new Date().toISOString()
   const id = newId()
@@ -111,10 +116,14 @@ export async function flushQueue() {
     for (; i < queue.length; i++) {
       const item = queue[i]
       try {
-        await api('/entries', {
-          method: item.op === 'insert' ? 'POST' : 'PATCH',
-          body: item.payload
-        })
+        if (item.op === 'site') {
+          await api('/sites', { method: 'POST', body: item.payload })
+        } else {
+          await api('/entries', {
+            method: item.op === 'insert' ? 'POST' : 'PATCH',
+            body: item.payload
+          })
+        }
       } catch (err) {
         // Keep on network error, 401 (re-login needed) or server error; stop this pass.
         const permanent = err.status && err.status >= 400 && err.status < 500 && err.status !== 401
