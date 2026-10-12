@@ -1,28 +1,29 @@
 import { useState } from 'react'
-import { supabase } from '../supabaseClient'
+import { api, saveSession } from '../api'
 
-export default function Login() {
+export default function Login({ onSignedIn }) {
+  const [mode, setMode] = useState('login') // 'login' | 'signup'
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function handleSend(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (!email.trim()) return
     setLoading(true)
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: window.location.origin + window.location.pathname
-      }
-    })
-    setLoading(false)
-    if (error) {
-      setError(error.message)
-    } else {
-      setSent(true)
+    try {
+      const { token, profile } = await api(mode === 'login' ? '/auth/login' : '/auth/signup', {
+        method: 'POST',
+        body: { email: email.trim(), password, full_name: fullName.trim() }
+      })
+      saveSession(token, profile)
+      onSignedIn(profile)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -36,37 +37,37 @@ export default function Login() {
       </div>
 
       <div className="card">
-        <h1>Sign in</h1>
-        {!sent ? (
-          <>
-            <p className="hint">Enter your work email. We'll send you a link — tap it to sign in, no password needed.</p>
-            <form onSubmit={handleSend}>
-              <label htmlFor="email">Email address</label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                inputMode="email"
-                placeholder="you@impi-secure.co.za"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-              <button className="primary" type="submit" disabled={loading}>
-                {loading ? 'Sending…' : 'Send sign-in link'}
-              </button>
-              {error && <p className="error">{error}</p>}
-            </form>
-          </>
-        ) : (
-          <>
-            <p className="success">Link sent to {email}.</p>
-            <p className="hint">
-              Open your email on this device and tap the link. You'll stay signed
-              in after that, even if you lose signal later in the day.
-            </p>
-          </>
-        )}
+        <h1>{mode === 'login' ? 'Sign in' : 'Create account'}</h1>
+        <p className="hint">
+          {mode === 'login'
+            ? 'Sign in with your work email and password. You stay signed in on this device, even offline.'
+            : 'Register with your work email. Choose a password of at least 8 characters.'}
+        </p>
+        <form onSubmit={handleSubmit}>
+          {mode === 'signup' && (
+            <>
+              <label htmlFor="name">Full name</label>
+              <input id="name" type="text" autoComplete="name" value={fullName}
+                onChange={(e) => setFullName(e.target.value)} required />
+            </>
+          )}
+          <label htmlFor="email">Email address</label>
+          <input id="email" type="email" autoComplete="email" inputMode="email"
+            placeholder="you@impi-secure.co.za" value={email}
+            onChange={(e) => setEmail(e.target.value)} required />
+          <label htmlFor="password">Password</label>
+          <input id="password" type="password" minLength={mode === 'signup' ? 8 : undefined}
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <button className="primary" type="submit" disabled={loading}>
+            {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
+          </button>
+          {error && <p className="error">{error}</p>}
+        </form>
+        <button className="link" type="button"
+          onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError('') }}>
+          {mode === 'login' ? 'First time? Create an account' : 'Already registered? Sign in'}
+        </button>
       </div>
     </div>
   )

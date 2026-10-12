@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '../supabaseClient'
+import { api } from '../api'
 import {
   getOpenEntry, getRecentEntries, signIn, signOut, updateNotes,
   setupAutoSync, pendingCount
@@ -13,7 +13,7 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-ZA', { day: '2-digit', month: 'short' })
 }
 
-export default function Home({ profile }) {
+export default function Home({ profile, onLogout }) {
   const [sites, setSites] = useState([])
   const [siteId, setSiteId] = useState('')
   const [siteOther, setSiteOther] = useState('')
@@ -38,8 +38,11 @@ export default function Home({ profile }) {
     window.addEventListener('offline', offlineHandler)
     const interval = setInterval(refresh, 5000)
 
-    supabase.from('sites').select('*').eq('active', true).order('name')
-      .then(({ data }) => setSites(data || []))
+    const cachedSites = (() => { try { return JSON.parse(localStorage.getItem('ijc_sites') || '[]') } catch { return [] } })()
+    setSites(cachedSites)
+    api('/sites')
+      .then(({ sites }) => { setSites(sites); localStorage.setItem('ijc_sites', JSON.stringify(sites)) })
+      .catch(() => {})
 
     if (openEntry) setNotes(openEntry.notes || '')
 
@@ -78,8 +81,8 @@ export default function Home({ profile }) {
     if (openEntry) await updateNotes(notes)
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
+  function handleLogout() {
+    onLogout()
   }
 
   const siteLabel = (entry) => {

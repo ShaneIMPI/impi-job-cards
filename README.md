@@ -1,124 +1,46 @@
-# IMPI Job Cards — Setup Guide
+# IMPI Job Cards — Neon + Vercel edition
 
-This is Phase 1 of the job card system: the database, and the staff-facing
-app for signing in/out of sites with notes. It works offline and syncs
-automatically. HR and Admin dashboards are Phase 2 (not built yet).
+Same staff app as before (sign in/out of sites, notes, works offline and syncs),
+now running on **Neon Postgres** with a small API on **Vercel**. No Supabase.
 
-Follow these steps in order. None of them require you to write code —
-you're pasting things into two dashboards (Supabase and GitHub) and
-clicking buttons.
+> Your old Supabase data was deleted with the project. This restores the app and
+> a fresh database; staff re-register and sites are re-added (steps 5–6).
 
-## Step 1 — Create the Supabase project
+## 1. Create the Neon database
+1. neon.tech → **New Project** (e.g. `impi-jobcards`, region closest to you).
+2. Open **SQL Editor**, paste all of `db/schema.sql`, click **Run**.
+3. On the project dashboard click **Connect** and copy the **pooled connection string**
+   (`postgres://…neon.tech/neondb?sslmode=require`).
 
-1. Go to https://supabase.com, sign in (or create a free account).
-2. Click **New Project**. Name it `impi-jobcards`, choose a strong database
-   password (save it somewhere safe — a password manager), pick a region
-   close to South Africa (e.g. `eu-west` if there's no `af` region), and
-   create it. Wait a minute or two for it to finish provisioning.
+## 2. Push to GitHub
+Create a repo `impi-jobcards` and upload everything in this folder
+(not `node_modules` or `dist`).
 
-## Step 2 — Run the database schema
+## 3. Deploy on Vercel
+1. vercel.com → **Add New → Project** → import the repo (Framework: **Vite**, auto-detected).
+2. Before deploying, add **Environment Variables**:
+   - `DATABASE_URL` — the Neon connection string
+   - `JWT_SECRET` — a long random string (e.g. run `openssl rand -base64 48`)
+   - `ALLOWED_EMAIL_DOMAIN` — optional, e.g. `impi-secure.co.za` (blocks outside emails registering)
+3. **Deploy**. The app is live at `https://<project>.vercel.app`.
 
-1. In your new Supabase project, open **SQL Editor** in the left sidebar.
-2. Click **New query**.
-3. Open the file `supabase/schema.sql` from this project, copy its entire
-   contents, and paste into the SQL editor.
-4. Click **Run**. You should see "Success. No rows returned."
+## 4. Make yourself admin
+Open the app, **Create account** with your email, then in Neon's SQL Editor:
+```sql
+update profiles set role = 'admin' where email = 'shane@impi-secure.co.za';
+update profiles set role = 'hr' where email = 'hr-contact@example.com';
+```
 
-## Step 3 — Turn on email sign-in
+## 5. Add sites
+```sql
+insert into sites (name) values ('Your site name') on conflict (name) do nothing;
+```
+(Two starter sites are inserted by the schema. Staff can still type a one-off site name.)
 
-1. Go to **Authentication → Providers**.
-2. Make sure **Email** is enabled.
-3. Go to **Authentication → Sign In / Providers** settings and, under Email,
-   you can leave "Confirm email" on or off — either works fine with magic
-   links, but leaving it off makes the first-time login slightly smoother.
-
-## Step 4 — Get your API keys
-
-1. Go to **Project Settings → API**.
-2. Copy the **Project URL** and the **anon public** key. You'll need these
-   in Step 6. Keep this tab open.
-
-## Step 5 — Push this code to GitHub
-
-1. Create a new repository on GitHub called `impi-jobcards` (or whatever
-   you prefer — just remember the name, you'll need it below).
-2. Using GitHub's web interface: click **Add file → Upload files**, then
-   drag in every file and folder from this project (keeping the folder
-   structure intact — `.github/workflows/deploy.yml`, `src/`, `supabase/`,
-   `package.json`, `vite.config.js`, `index.html`, `.gitignore`,
-   `.env.example`).
-3. **Important:** if your repository name is not `impi-jobcards`, open
-   `vite.config.js` in GitHub's editor and change every occurrence of
-   `/impi-jobcards/` to `/your-actual-repo-name/`.
-4. Commit directly to the `main` branch.
-
-## Step 6 — Add your Supabase keys as GitHub secrets
-
-The app needs your Supabase URL and key to run, but we never put these
-directly in the code (so they're not visible to the public). Instead:
-
-1. In your GitHub repo, go to **Settings → Secrets and variables →
-   Actions**.
-2. Click **New repository secret**. Name: `VITE_SUPABASE_URL`. Value:
-   the Project URL from Step 4. Save.
-3. Click **New repository secret** again. Name: `VITE_SUPABASE_ANON_KEY`.
-   Value: the anon public key from Step 4. Save.
-
-## Step 7 — Turn on GitHub Pages
-
-1. In your repo, go to **Settings → Pages**.
-2. Under "Build and deployment", set **Source** to **GitHub Actions**.
-3. Go to the **Actions** tab in your repo — you should see a workflow
-   run start automatically (triggered by your Step 5 commit). Wait for
-   it to finish (green checkmark, a few minutes).
-4. Once it's done, go back to **Settings → Pages** — your live URL will
-   be shown at the top, something like:
-   `https://YOUR-GITHUB-USERNAME.github.io/impi-jobcards/`
-
-## Step 8 — Point Supabase at your live URL
-
-1. Back in Supabase, go to **Authentication → URL Configuration**.
-2. Set **Site URL** to your GitHub Pages URL from Step 7.
-3. Under **Redirect URLs**, add that same URL.
-4. Save.
-
-## Step 9 — Add your sites
-
-1. In Supabase, go to **Table Editor → sites**.
-2. Click **Insert row** for each site you want in the dropdown, e.g.
-   "Menlyn Park Shopping Centre", "Nasonti / Goedehoop Mine". You can add
-   more any time — staff can also type a one-off site name if it's not
-   in the list yet.
-
-## Step 10 — Make yourself Admin
-
-1. Open the app at your GitHub Pages URL, enter your email, and tap the
-   magic link sent to you. This creates your profile automatically
-   (as a regular "staff" role for now).
-2. Back in Supabase, go to **SQL Editor** and run (replace with your
-   real email):
-   ```sql
-   update profiles set role = 'admin' where email = 'shane@impi-secure.co.za';
-   ```
-3. Do the same with `role = 'hr'` for your HR contact's email, once
-   they've logged in once too.
-
-## You're live
-
-From here, any manager can go to the app URL, sign in with their email,
-select a site, tap "Sign in now," and tap "Sign out of this site" when
-they leave — with notes in between. It works with no signal and syncs
-automatically once back online.
-
-## What's next (Phase 2 — not built yet)
-
-- **HR dashboard**: read-only view of all staff visits for the month.
-- **Admin panel**: manage staff list and site list from inside the app
-  (right now, adding sites is done via Supabase directly, and role
-  changes are done via SQL).
-- **Monthly export**: a one-click report generator producing a
-  letterheaded Word/PDF document per staff member or consolidated,
-  ready to email to HR — following the same document pipeline used for
-  your other IMPI reports.
-
-Let me know when you're ready for Phase 2 and we'll build it the same way.
+## Notes
+- Login is email + password (replaces Supabase magic links, so no email provider is needed).
+  Sessions last 90 days and keep working offline.
+- Forgot password: reset in Neon with a new hash, or delete the profile row and re-register.
+- Local dev: `npm i -g vercel`, `vercel dev` (needs the env vars above).
+- Phase 2 (HR dashboard, admin panel, monthly export) can be built on `GET /api/entries?all=1`,
+  which already returns all staff visits for HR/admin roles.
