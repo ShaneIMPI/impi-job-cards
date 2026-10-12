@@ -1,9 +1,9 @@
 import { sql } from './_lib/db.js'
-import { getUser, send } from './_lib/auth.js'
+import { getUser, send, safe } from './_lib/auth.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export default async function handler(req, res) {
+export default safe(async function handler(req, res) {
   const u = await getUser(req)
   if (!u || !u.active) return send(res, 401, { error: 'Not signed in' })
   const b = req.body || {}
@@ -45,4 +45,4 @@ export default async function handler(req, res) {
     return send(res, 200, { ok: true })
   }
   return send(res, 405, { error: 'Method not allowed' })
-}
+})

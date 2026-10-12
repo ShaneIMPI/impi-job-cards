@@ -28,7 +28,7 @@ export async function api(path, { method = 'GET', body } = {}) {
   let data = {}
   try { data = await res.json() } catch { /* empty */ }
   if (!res.ok) {
-    const err = new Error(data.error || 'Request failed')
+    const err = new Error(data.error || `Server error (HTTP ${res.status}). Check /api/health`)
     err.status = res.status
     throw err
   }

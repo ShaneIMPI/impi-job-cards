@@ -1,7 +1,7 @@
 import { sql } from '../_lib/db.js'
-import { hashPassword, signToken, publicProfile, send } from '../_lib/auth.js'
+import { hashPassword, signToken, publicProfile, send, safe } from '../_lib/auth.js'
 
-export default async function handler(req, res) {
+export default safe(async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' })
   const { email, password, full_name } = req.body || {}
   const e = String(email || '').trim().toLowerCase()
@@ -16,6 +16,6 @@ export default async function handler(req, res) {
     return send(res, 200, { token: await signToken(rows[0].id), profile: publicProfile(rows[0]) })
   } catch (err) {
     if (String(err.message).includes('unique')) return send(res, 409, { error: 'That email is already registered. Please sign in.' })
-    return send(res, 500, { error: 'Could not create account.' })
+    throw err
   }
-}
+})

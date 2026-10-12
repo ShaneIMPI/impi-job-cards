@@ -35,3 +35,18 @@ export function publicProfile(p) {
   return { id: p.id, email: p.email, full_name: p.full_name, role: p.role, active: p.active }
 }
 export const send = (res, code, body) => res.status(code).json(body)
+
+// Wrap a handler so any crash returns readable JSON (and is logged in Vercel).
+import { ConfigError } from './db.js'
+export const safe = (fn) => async (req, res) => {
+  try {
+    if (!process.env.JWT_SECRET) throw new ConfigError('JWT_SECRET is not set in Vercel, or the project was not redeployed after adding it.')
+    return await fn(req, res)
+  } catch (err) {
+    console.error(err)
+    const msg = err instanceof ConfigError ? err.message
+      : /relation .* does not exist/i.test(err.message || '') ? 'Database tables are missing. Run db/schema.sql in the Neon SQL Editor.'
+      : 'Server error: ' + (err.message || 'unknown')
+    return res.status(500).json({ error: msg })
+  }
+}

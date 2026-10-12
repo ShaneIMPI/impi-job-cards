@@ -1,7 +1,7 @@
 import { sql } from './_lib/db.js'
-import { getUser, send } from './_lib/auth.js'
+import { getUser, send, safe } from './_lib/auth.js'
 
-export default async function handler(req, res) {
+export default safe(async function handler(req, res) {
   const u = await getUser(req)
   if (!u || !u.active) return send(res, 401, { error: 'Not signed in' })
   if (req.method === 'GET') {
@@ -16,4 +16,4 @@ export default async function handler(req, res) {
     return send(res, 200, { site: rows[0] })
   }
   return send(res, 405, { error: 'Method not allowed' })
-}
+})
